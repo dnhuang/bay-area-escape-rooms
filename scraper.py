@@ -16,6 +16,7 @@ class EscapeRoom:
         self.name, self.city, self.rating = self.set_room_info()
         self.upper_bound = self.set_reviews_loop_upper_bound()
         self.all_reviews = self.set_all_page_reviews()
+        self.sentiment_scores = self.compute_sentiments()
     
     # Returns the upper bound for looping through the review pages.
     # Example: If the review page consists of 20 pages, then the search query will
@@ -62,24 +63,12 @@ class EscapeRoom:
                 review = review_element.text
                 page_reviews.append(review)
             return page_reviews
-        
-        # Helper function that takes in a soup object and returns the rating of
-        # that "page" as a list of ratings
-        def get_page_ratings(soup_obj):        
-            # regex pattern to capture review ratings
-            user_rating_pattern = re.compile(r'(?:[1-4](?:\.5)?|5(?:\.0)?) star rating')
-            page_ratings = []
-            rating_elements = soup_obj.find_all('div', {'aria-label': user_rating_pattern, 'class': 'css-14g69b3'})
-            for rating_element in rating_elements:
-                rating_value = rating_element['aria-label'].split()[0] # just want the number
-                page_ratings.append(rating_value)
-
-            # list comp to convert strings to ints (user ratings have no decimals)
-            return [int(page_rating) for page_rating in page_ratings[:10]]
 
         all_reviews = []
         #### CHANGE UPPER BOUND LATER ####
-        for i in range(0, 11, 10): # loop through all review pages
+        print(f'total pages: {int((self.upper_bound - 1) / 10 + 1)}')
+        for i in range(0, self.upper_bound, 10): # loop through all review pages
+            print(f'appending reviews for page {int(i/10) + 1}...')
             curr_full_url = self.full_url
             if i != 0: # append appropriate search query for review page
                 curr_full_url += f'?start={i}' 
@@ -90,4 +79,15 @@ class EscapeRoom:
 
             # .extend instead of .append because get_page_reviews returns a list
             all_reviews.extend(get_page_reviews(curr_soup_obj))
+            print(f'length of reviews: {len(all_reviews)}')
         return all_reviews
+
+    # Takes in a list of reviews and returns a list of sentiment scores corresponding in the
+    # same order the reviews are in the reviews list
+    def compute_sentiments(self, decimals=4):
+        sentiment_scores = []
+        for review in self.all_reviews:
+            review_blob = TextBlob(review)
+            sentiment_score = review_blob.sentiment.polarity
+            sentiment_scores.append((round(sentiment_score, decimals)))
+        return sentiment_scores
