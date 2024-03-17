@@ -1,4 +1,5 @@
 import requests
+import re
 from bs4 import BeautifulSoup
 from textblob import TextBlob
 
@@ -12,7 +13,7 @@ class EscapeRoom:
         self.soup = BeautifulSoup(requests.get(self.full_url).text, 'html.parser')
 
         # Abstracted intializations
-        self.name, self.city = self.set_room_info()
+        self.name, self.city, self.rating = self.set_room_info()
         self.upper_bound = self.set_reviews_loop_upper_bound()
         self.all_reviews = self.set_all_page_reviews()
     
@@ -36,11 +37,18 @@ class EscapeRoom:
         room_title_info = self.soup.title.text.split('-')
         
         # Title is the 0th element in the list with trailing white spaces
-        room_name = room_title_info[0].strip()
+        room_name = room_title_info[0].strip().lower()
 
         # Address is the 2nd elemnt in the list, city is the second to last element in list with trailing white spaces
         room_city = room_title_info[2].split(',')[-2].strip()
-        return room_name, room_city
+
+        # Get the overall rating of the escape room
+        overall_rating_pattern = re.compile(r'(?:[1-4](?:\.5)?|5(?:\.0)?) star rating')
+        # seems like 2 of the same gets extracted, pick the 0th element
+        room_overall_element = self.soup.find_all('div', {'aria-label': overall_rating_pattern, 'class': 'css-1v6kfrx'})[0]
+        room_overall_rating = float(room_overall_element['aria-label'].split()[0])
+
+        return room_name, room_city, room_overall_rating
     
     # Gets every review of an escape room and returns it in a list
     def set_all_page_reviews(self):
@@ -54,9 +62,23 @@ class EscapeRoom:
                 review = review_element.text
                 page_reviews.append(review)
             return page_reviews
+        
+        # Helper function that takes in a soup object and returns the rating of
+        # that "page" as a list of ratings
+        def get_page_ratings(soup_obj):        
+            # regex pattern to capture review ratings
+            user_rating_pattern = re.compile(r'(?:[1-4](?:\.5)?|5(?:\.0)?) star rating')
+            page_ratings = []
+            rating_elements = soup_obj.find_all('div', {'aria-label': user_rating_pattern, 'class': 'css-14g69b3'})
+            for rating_element in rating_elements:
+                rating_value = rating_element['aria-label'].split()[0] # just want the number
+                page_ratings.append(rating_value)
+
+            # list comp to convert strings to ints (user ratings have no decimals)
+            return [int(page_rating) for page_rating in page_ratings[:10]]
 
         all_reviews = []
-        #### CHANGE UPPER BOUND LATER ###
+        #### CHANGE UPPER BOUND LATER ####
         for i in range(0, 11, 10): # loop through all review pages
             curr_full_url = self.full_url
             if i != 0: # append appropriate search query for review page
